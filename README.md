@@ -56,7 +56,7 @@ spec:
 EOF
 ```
 
-### Start a POD to run PV
+### Start a POD to mount PV
 
 ```bash
 cat << EOF | kubectl apply -f -
@@ -82,5 +82,11 @@ spec:
           memory: "1Gi"
           cpu: "1"
 EOF
+```
+
+### Copy model to PV
+
+```bash
+kubectl cp MLP.mar model-store-pod:/pv/MLP.mar -c model-store-container
 ```
 
