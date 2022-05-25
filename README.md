@@ -90,3 +90,18 @@ EOF
 kubectl cp MLP.mar model-store-pod:/pv/MLP.mar -c model-store-container
 ```
 
+### Deploy `InferenceService` with the model on PVC
+
+```bash
+cat << EOF | kubectl apply -f -
+apiVersion: "serving.kserve.io/v1beta1"
+kind: "InferenceService"
+metadata:
+  name: "mlp-inference-service"
+spec:
+  predictor:
+    pytorch:
+      storageUri: "pvc://mlp-pv-claim/MLP.mar"
+EOF
+```
+
