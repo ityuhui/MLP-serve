@@ -25,7 +25,8 @@ chmod 777 /mnt/mlp/data
 
 ### Create PV and PVC
 
-```yaml
+```bash
+cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -44,7 +45,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: task-pv-claim
+  name: mlp-pv-claim
 spec:
   storageClassName: manual
   accessModes:
@@ -52,4 +53,5 @@ spec:
   resources:
     requests:
       storage: 1Gi
+EOF
 ```
