@@ -55,3 +55,32 @@ spec:
       storage: 1Gi
 EOF
 ```
+
+### Start a POD to run PV
+
+```bash
+cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mlp-model-store-pod
+spec:
+  volumes:
+    - name: mlp-model-store-volume
+      persistentVolumeClaim:
+        claimName: mlp-pv-claim
+  containers:
+    - name: mlp-model-store-container
+      image: ubuntu
+      command: [ "sleep" ]
+      args: [ "infinity" ]
+      volumeMounts:
+        - mountPath: "/pv"
+          name: mlp-model-store-volume
+      resources:
+        limits:
+          memory: "1Gi"
+          cpu: "1"
+EOF
+```
+
