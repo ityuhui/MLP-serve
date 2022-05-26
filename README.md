@@ -2,26 +2,33 @@
 
 ## Setup a Kubernetes cluster
 
-Only for experiment:
+For experimentation only:
+
 ```bash
-kind create cluster  --image kindest/node:v1.21.1
+mkdir -p /mnt/torchserve
+chmod 777 /mnt/torchserve
+
+cat << EOF | kind create cluster --config -
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.21.1
+    extraMounts:
+      - hostPath: /mnt/torchserve
+        containerPath: /torchserve
+EOF
 ```
 
 ## Install KServe
 
-Only for experiment:
+For experimentation only:
+
 ```bash
 curl -s "https://raw.githubusercontent.com/kserve/kserve/release-0.7/hack/quick_install.sh" | bash
 ```
 
 ## Prepare storage for model
-
-### Create directory
-
-```bash
-mkdir -p /mnt/mlp/data
-chmod 777 /mnt/mlp/data
-```
 
 ### Create PV and PVC
 
@@ -30,7 +37,7 @@ cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: mlp-pv-volume
+  name: torchserve-pv-volume
   labels:
     type: local
 spec:
@@ -40,12 +47,12 @@ spec:
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: "/mnt/mlp/data"
+    path: "/torchserve"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mlp-pv-claim
+  name: torchserve-pv-claim
 spec:
   storageClassName: manual
   accessModes:
@@ -63,20 +70,20 @@ cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mlp-model-store-pod
+  name: torchserve-model-store-pod
 spec:
   volumes:
-    - name: mlp-model-store-volume
+    - name: torchserve-model-store-volume
       persistentVolumeClaim:
-        claimName: mlp-pv-claim
+        claimName: torchserve-pv-claim
   containers:
-    - name: mlp-model-store-container
+    - name: torchserve-model-store-container
       image: ubuntu
       command: [ "sleep" ]
       args: [ "infinity" ]
       volumeMounts:
         - mountPath: "/pv"
-          name: mlp-model-store-volume
+          name: torchserve-model-store-volume
       resources:
         limits:
           memory: "1Gi"
@@ -87,7 +94,25 @@ EOF
 ### Copy model to PV
 
 ```bash
-kubectl cp MLP.mar model-store-pod:/pv/MLP.mar -c model-store-container
+
+mkdir -p /mnt/torchserve/mlp/model-store
+cp MLP.mar /mnt/torchserve/mlp/model-store/
+mkdir /mnt/torchserve/mlp/config
+cat > /mnt/torchserve/mlp/config/config.properties << EOF
+inference_address=http://0.0.0.0:8085
+management_address=http://0.0.0.0:8081
+metrics_address=http://0.0.0.0:8082
+enable_metrics_api=true
+metrics_format=prometheus
+number_of_netty_threads=4
+job_queue_size=10
+service_envelope=kfserving
+model_store=/mnt/models/model-store
+model_snapshot={"name":"startup.cfg","modelCount":1,"models":{"MLP":{"1.0":{"defaultVersion":true,"marName":"MLP.mar","minWorkers":1,"maxWorkers":5,"batchSize":1,"maxBatchDelay":5000,"responseTimeout":120}}}}
+EOF
+
+# Check
+kubectl exec torchserve-model-store-pod -c torchserve-model-store-container -- ls /pv/
 ```
 
 ## Deploy `InferenceService` with the model on PVC
@@ -101,7 +126,7 @@ metadata:
 spec:
   predictor:
     pytorch:
-      storageUri: "pvc://mlp-pv-claim/MLP.mar"
+      storageUri: "pvc://torchserve-pv-claim/mlp"
 EOF
 ```
 
@@ -139,4 +164,10 @@ Expected Output
 < 
 * Connection #0 to host localhost left intact
 {"predictions": [1, 1]}
+```
+
+## Clean
+
+```bash
+kind delete cluster
 ```
